@@ -36,7 +36,7 @@ Be honest and specific.
 
 - I mainly decided on changing the colours, angles, font, reactivity and experience with the mouse and keyboard, element sizes and typography placement.
 - My focus was keeping it simple and based on our learning in this course, not just slop. I wanted to stay true to our core and build on it with ideas, which i haven't learned yet with the help of AI and what ideas I had in my head.
-- The overall theme of the project is an artist i listen to. I wanted to definitely add music or a sound effect to this project.
+- The overall theme of the project is an artist i listen to. I wanted to definitely add music or a sound effect to this project. After the discussion with Vera, I also focused on warping the background and slight hover effects.
 
 ### Reflection
 

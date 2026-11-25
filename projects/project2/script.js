@@ -29,6 +29,8 @@ let statHover = [];
 // This slider changes the displayed model size on the caught screen.
 let specimenScale = 0.85;
 let specimenSliderDragging = false;
+const specimenScaleMin = 0.4;
+const specimenScaleMax = 1.0;
 
 // Timeline data is read from overfishing_europe.csv.
 let overfishingData = [];
@@ -150,8 +152,6 @@ function drawTitleScreen() {
 
   fill(0, 0, 90);
   textSize(18);
-
-  // Keep the start prompt comfortably above the bottom edge.
   text("Press space to begin", 0, height / 2 - 85);
 }
 
@@ -159,8 +159,6 @@ function drawGameTitle() {
   fill(0, 0, 100);
   textFont(titleFont);
   textSize(min(width * 0.05, 72));
-
-  // Add more breathing room above the title.
   text("What's the Catch?", 0, -height / 2 + 110);
 }
 
@@ -228,12 +226,10 @@ function drawFish() {
   translate(0, fishY, 0);
 
   if (currentFish === 0) {
-  // Goldfish: this rotation corrects its exported orientation.
-  rotateX(PI);
-} else {
-  // Angler: try flipping around its local Z axis.
-  rotateZ(PI);
-}
+    rotateX(PI);
+  } else {
+    rotateZ(PI);
+  }
 
   rotateY(frameCount * 0.02);
   scale(fishScale * 1.5);
@@ -258,11 +254,11 @@ function drawCaughtScreen() {
 
   fill(185, 45, 100, caughtOpacity);
   textSize(min(width * 0.03, 64));
-  text("You just caught:", 0, -height * 0.27);
+  text("You just caught:", 0, -height * 0.32);
 
   fill(0, 0, 100, caughtOpacity);
   textSize(32);
-  text(caughtName + "!", 0, -height * 0.18);
+  text(caughtName + "!", 0, -height * 0.26);
   pop();
 
   const nextPrompt = fishCaughtCount < 2
@@ -287,16 +283,15 @@ function drawCaughtSpecimen() {
   translate(fishX, 0, 0);
 
   if (currentFish === 0) {
-  // Goldfish: this rotation corrects its exported orientation.
-  rotateX(PI);
-} else {
-  // Angler: try flipping around its local Z axis.
-  rotateZ(PI);
-}
+    rotateX(PI);
+  } else {
+    rotateZ(PI);
+  }
 
   rotateY(frameCount * 0.01);
   scale(specimenScale * 0.85);
 
+  // Draw the selected fish model on the specimen page.
   if (currentFish === 0) {
     model(goldfish);
   } else {
@@ -313,11 +308,29 @@ function drawSpecimenSlider(fishX) {
   const sliderWidth = min(width * 0.22, 260);
   const leftEdge = fishX - sliderWidth / 2;
   const rightEdge = fishX + sliderWidth / 2;
-  const knobX = map(specimenScale, 0.4, 1.4, leftEdge, rightEdge);
+  const knobX = map(
+    specimenScale,
+    specimenScaleMin,
+    specimenScaleMax,
+    leftEdge,
+    rightEdge
+  );
+
+  // Estimate the fish's reference length from the slider position.
+  const maxLengthCm = currentFish === 0 ? 48 : 200;
+  const referenceLengthCm = round(maxLengthCm * specimenScale);
 
   fill(0, 0, 100, caughtOpacity);
   textSize(13);
-  text("SPECIMEN SCALE", fishX, sliderY - 26);
+  text("REFERENCE LENGTH", fishX, sliderY - 40);
+
+  fill(0, 0, 100, caughtOpacity);
+  textSize(12);
+  text(
+    referenceLengthCm + " cm / " + maxLengthCm + " cm max",
+    fishX,
+    sliderY - 24
+  );
 
   fill(0, 0, 45, caughtOpacity);
   rect(fishX, sliderY, sliderWidth, 6, 3);
@@ -330,8 +343,12 @@ function drawSpecimenSlider(fishX) {
 
   fill(0, 0, 78, caughtOpacity);
   textSize(10);
-  text("SMALL", leftEdge, sliderY + 19);
-  text("LARGE", rightEdge, sliderY + 19);
+  text(
+    round(maxLengthCm * specimenScaleMin) + " cm",
+    leftEdge,
+    sliderY + 19
+  );
+  text(maxLengthCm + " cm", rightEdge, sliderY + 19);
 }
 
 function drawFishStats() {
@@ -354,11 +371,13 @@ function drawFishStats() {
       ];
 
   const panelWidth = min(width * 0.43, 570);
-  const panelCenterX = width * 0.22;
+  const panelCenterX = width * 0.24;
   const leftX = panelCenterX - panelWidth / 2;
-  const rowHeight = 38;
-  const rowGap = 47;
-  const firstY = -height * 0.13;
+  const rowHeight = 42;
+  const rowGap = 58;
+
+  // Center the five stat rows vertically beside the fish.
+  const firstY = -((facts.length - 1) * rowGap) / 2;
 
   if (statHover.length !== facts.length) {
     statHover = Array(facts.length).fill(0);
@@ -585,8 +604,8 @@ function updateSpecimenSlider() {
     mouseCanvasX,
     fishX - sliderWidth / 2,
     fishX + sliderWidth / 2,
-    0.4,
-    1.4,
+    specimenScaleMin,
+    specimenScaleMax,
     true
   );
 }
