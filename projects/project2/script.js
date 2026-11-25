@@ -100,7 +100,11 @@ function draw() {
     return;
   }
 
-  drawGameTitle();
+  // Give the caught message a clear focal area instead of drawing the header
+  // behind it on this compact result screen.
+  if (scene !== "caught") {
+    drawGameTitle();
+  }
 
   if (scene === "typing" || scene === "falling") {
     drawCatchLetters();
@@ -248,17 +252,19 @@ function drawCaughtScreen() {
   caughtOpacity = min(caughtOpacity + 4, 100);
   caughtScale = min(caughtScale + 0.025, 1);
 
-  // Result headline.
+  // Keep the catch announcement at the top of the specimen screen.
+  const headlineY = -height / 2 + (height < 520 ? 82 : 80);
+
   push();
   scale(caughtScale);
 
   fill(185, 45, 100, caughtOpacity);
-  textSize(min(width * 0.03, 64));
-  text("You just caught:", 0, -height * 0.32);
+  textSize(min(width * 0.04, height < 520 ? 30 : 42));
+  text("You just caught:", 0, headlineY);
 
   fill(0, 0, 100, caughtOpacity);
-  textSize(32);
-  text(caughtName + "!", 0, -height * 0.26);
+  textSize(height < 520 ? 24 : 32);
+  text(caughtName + "!", 0, headlineY + (height < 520 ? 34 : 60));
   pop();
 
   const nextPrompt = fishCaughtCount < 2
@@ -267,7 +273,7 @@ function drawCaughtScreen() {
 
   fill(0, 0, 85, caughtOpacity);
   textSize(16);
-  text(nextPrompt, 0, height / 2 - 78);
+  text(nextPrompt, 0, height / 2 - (height < 520 ? 18 : 78));
 
   drawCaughtSpecimen();
   drawFishStats();
@@ -373,11 +379,13 @@ function drawFishStats() {
   const panelWidth = min(width * 0.43, 570);
   const panelCenterX = width * 0.24;
   const leftX = panelCenterX - panelWidth / 2;
-  const rowHeight = 42;
-  const rowGap = 58;
+  const compactLayout = height < 520;
+  const rowHeight = compactLayout ? 34 : 42;
+  const rowGap = compactLayout ? 44 : 58;
 
-  // Center the five stat rows vertically beside the fish.
-  const firstY = -((facts.length - 1) * rowGap) / 2;
+  // Center the rows beside the fish, leaving room above for the catch heading.
+  const compactOffset = compactLayout ? 45 : 0;
+  const firstY = -((facts.length - 1) * rowGap) / 2 + compactOffset;
 
   if (statHover.length !== facts.length) {
     statHover = Array(facts.length).fill(0);
@@ -424,11 +432,7 @@ function drawOverfishingScreen() {
   fill(0, 0, 100);
   textFont(titleFont);
   textSize(min(width * 0.055, 64));
-  text("The cost of your catch", 0, -height * 0.40);
-
-  fill(0, 0, 82);
-  textSize(15);
-  text("Fish caught faster than they can recover", 0, -height * 0.33);
+  text("The Cost Of Your Catch", 0, -height * 0.40);
 
   drawOverfishingChart();
   drawYearSlider();
@@ -510,11 +514,17 @@ function drawOverfishingChart() {
   const selected = overfishingData.find(
     row => row.year === selectedYear
   );
-  const valueY = top - 34;
+  // Lift the selected percentage clear of the chart and give it a subtle pulse.
+  const valueY = top - 74;
 
   if (selected && selected.pressure !== null) {
+    const valuePulse = sin(frameCount * 0.05);
+    noStroke();
+    fill(45, 90, 100, 12);
+    circle(0, valueY, 78 + valuePulse * 8);
+
     fill("#FFD166");
-    textSize(30);
+    textSize(28 + valuePulse * 2);
     text(selected.pressure + "%", 0, valueY);
 
     fill(0, 0, 82);
@@ -522,7 +532,7 @@ function drawOverfishingChart() {
     text(
       "of overfishing above safe levels",
       0,
-      valueY + 30
+      valueY + 38
     );
   } else {
     fill(0, 0, 100);
@@ -542,7 +552,7 @@ function drawYearSlider() {
 
   fill(0, 0, 100);
   textSize(14);
-  text("OVER THE YEARS · " + selectedYear, 0, sliderY - 28);
+  text("YEAR · " + selectedYear, 0, sliderY - 28);
 
   fill(0, 0, 45);
   rect(0, sliderY, sliderWidth, 6, 3);
@@ -563,8 +573,7 @@ function drawDataSourceNote() {
   fill(0, 0, 75);
   textAlign(CENTER, CENTER);
   textSize(12);
-  text("Observed: 2003–2023", 0, height / 2 - 34);
-  text("Unavailable: 2000–2002 and 2024–2026", 0, height / 2 - 15);
+  text("Data recorded from 2003 to 2023.", 0, height / 2 - 24);
 }
 
 function drawDataTransition() {
@@ -573,7 +582,6 @@ function drawDataTransition() {
 
   if (transitionProgress < 0.5) {
     // Fade the second fish's result screen down to a dark pause.
-    drawGameTitle();
     drawCaughtScreen();
     coverAlpha = map(transitionProgress, 0, 0.5, 0, 100);
   } else {
