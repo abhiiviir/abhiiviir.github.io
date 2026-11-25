@@ -1,66 +1,61 @@
-// Font, portrait image, and music file
+// CHROMAKOPIA | interactive typography | p5.js 2.x
+// Add p5.sound to the sketch's libraries for the music interaction.
+
 let font;
 let portrait;
 let music;
 
-// Main title and repeated text used to build the portrait
-let word = "CHROMAKOPIA";
-let backgroundWord = "TylerTheCreator";
+const word = "CHROMAKOPIA";
+const backgroundWord = "TylerTheCreator";
+const portraitFile = "assets/tyler.jpg";
+const fontFile = "assets/PolenoDEMO-Bold.otf";
+const musicFile = "assets/music.mp3";
 
-// Controls portrait detail
-let cellSize = 24;
+// Smaller cells create a more detailed, but heavier, text portrait.
+const cellSize = 24;
 let mosaicCells = [];
 
-// Stores the title's current mouse-controlled position and angle
+// These values ease toward the mouse so the title feels weighted.
 let titleTiltX = 0;
 let titleTiltY = 0;
 let titleX = 0;
-
-// Controls the title pulse when space is pressed
 let pulse = 0;
 
+// White hover highlight fades smoothly instead of switching abruptly.
+let titleHover = [];
+
 async function setup() {
-  // WEBGL lets the title rotate in 3D
   createCanvas(windowWidth, windowHeight, WEBGL);
   textAlign(CENTER, CENTER);
   colorMode(HSB, 360, 100, 100, 100);
   noStroke();
 
-  // Load the assets before using them
-  font = await loadFont("PolenoDEMO-Bold.otf");
-  portrait = await loadImage("tyler.jpg");
-  music = await loadSound("music.mp3");
+  // Load assets before using them. Add p5.sound in the editor for loadSound().
+  font = await loadFont(fontFile);
+  portrait = await loadImage(portraitFile);
+  music = await loadSound(musicFile);
 
   textFont(font);
-  music.amp(0.35); // Set music volume
-
+  music.amp(0.35);
+  titleHover = Array(word.length).fill(0);
   preparePortraitText();
 }
 
 function preparePortraitText() {
-  // Crop the image to fill the canvas without stretching it
-  let scaleAmount = max(width / portrait.width, height / portrait.height);
-  let cropWidth = width / scaleAmount;
-  let cropHeight = height / scaleAmount;
-  let cropX = (portrait.width - cropWidth) / 2;
-  let cropY = (portrait.height - cropHeight) / 2;
-
-  let croppedPortrait = portrait.get(
-    cropX,
-    cropY,
-    cropWidth,
-    cropHeight
-  );
-
+  // Crop the image to fill the canvas while keeping its original proportions.
+  const scaleAmount = max(width / portrait.width, height / portrait.height);
+  const cropWidth = width / scaleAmount;
+  const cropHeight = height / scaleAmount;
+  const cropX = (portrait.width - cropWidth) / 2;
+  const cropY = (portrait.height - cropHeight) / 2;
+  const croppedPortrait = portrait.get(cropX, cropY, cropWidth, cropHeight);
   croppedPortrait.resize(width, height);
-  mosaicCells = [];
 
-  // Save the brightness at each grid position
+  // Save brightness once, rather than sampling the image every frame.
+  mosaicCells = [];
   for (let x = 0; x < width; x += cellSize) {
     for (let y = 0; y < height; y += cellSize) {
-      let pixelBrightness = brightness(croppedPortrait.get(x, y));
-
-      // Save the position and brightness for drawing later
+      const pixelBrightness = brightness(croppedPortrait.get(x, y));
       mosaicCells.push({
         x: x - width / 2,
         y: y - height / 2,
@@ -73,111 +68,181 @@ function preparePortraitText() {
 function draw() {
   background("#06120D");
 
-  // Draw the portrait first so the title appears over it
+  // Draw the portrait first, so it remains behind the main title.
   drawTextPortrait();
   drawTitle();
   drawPrompt();
 
-  // Gradually fade the pulse after a spacebar press
+  // The spacebar pulse eases away over time.
   pulse = max(0, pulse - 0.025);
 }
 
 function drawTextPortrait() {
-  // Place the text portrait behind the title
   push();
   translate(0, 0, -180);
   textFont(font);
 
-  // Draw one letter at every saved image position
+  const titleSize = getTitleSize();
+  const titleWidth = getTitleWidth(titleSize);
+  const titleHeight = titleSize * 0.9;
+
   for (let i = 0; i < mosaicCells.length; i++) {
-    let cell = mosaicCells[i];
-    let letter = backgroundWord[i % backgroundWord.length];
+    const cell = mosaicCells[i];
+    const letter = backgroundWord[i % backgroundWord.length];
 
-    // Bright image areas get larger, brighter letters
-    let letterSize = map(cell.brightness, 0, 100, 7, cellSize * 1.2);
-    let greenBrightness = map(cell.brightness, 0, 100, 18, 65);
-    let letterOpacity = map(cell.brightness, 0, 100, 20, 85);
+    // Measure each background cell's distance from the title footprint.
+    // Inside the title footprint, push the portrait farther down the z-axis.
+    const localX = cell.x - titleX;
+    const nearestX = max(abs(localX) - titleWidth * 0.55, 0);
+    const nearestY = max(abs(cell.y) - titleHeight * 0.55, 0);
+    const distanceFromTitle = sqrt(nearestX * nearestX + nearestY * nearestY);
+    const warpRadius = max(35, titleSize * 0.22);
+    const warpStrength = 1 - constrain(distanceFromTitle / warpRadius, 0, 1);
+    const smoothWarp = warpStrength * warpStrength * (3 - 2 * warpStrength);
 
+    // Add extra clearance for the title's rotated edges.
+    const rotationClearance =
+      abs(sin(titleTiltX)) * titleHeight * 0.55 +
+      abs(sin(titleTiltY)) * titleWidth * 0.55;
+    const zPushBack = smoothWarp * (35 + rotationClearance * 0.35);
+
+    // Compress and dim letters near the title to create a soft depression.
+    const localScale = 1 - smoothWarp * 0.18;
+    const letterSize =
+      map(cell.brightness, 0, 100, 7, cellSize * 1.2) * localScale;
+    const greenBrightness = map(cell.brightness, 0, 100, 18, 65);
+    const letterOpacity =
+      map(cell.brightness, 0, 100, 20, 85) * (1 - smoothWarp * 0.2);
+
+    push();
+    translate(cell.x, cell.y, -zPushBack);
     fill(145, 85, greenBrightness, letterOpacity);
     textSize(letterSize);
-    text(letter, cell.x, cell.y);
+    text(letter, 0, 0);
+    pop();
   }
 
   pop();
 }
 
 function drawTitle() {
-  // Map mouse position to the title's tilt and horizontal movement
-  let targetTiltY = map(mouseX, 0, width, -0.6, 0.6);
-  let targetTiltX = map(mouseY, 0, height, 0.15, -0.15);
-  let targetX = map(mouseX, 0, width, -30, 30);
+  // Map pointer position to a restrained 3D tilt and horizontal drift.
+  const targetTiltY = map(mouseX, 0, width, -0.6, 0.6);
+  const targetTiltX = map(mouseY, 0, height, 0.15, -0.15);
+  const targetX = map(mouseX, 0, width, -30, 30);
 
-  // Smoothly move the title toward the mouse-controlled values
   titleTiltX = lerp(titleTiltX, targetTiltX, 0.1);
   titleTiltY = lerp(titleTiltY, targetTiltY, 0.1);
   titleX = lerp(titleX, targetX, 0.06);
 
-  // Make the title briefly grow during the pulse
-  let titleScale = 1 + pulse * 0.18;
+  const titleSize = getTitleSize();
+  const titleScale = 1 + pulse * 0.18;
+  const widths = getLetterWidths(titleSize);
+  const totalWidth = widths.reduce((sum, value) => sum + value, 0);
+  let cursorX = -totalWidth / 2;
 
   push();
   translate(titleX, 0, 0);
   rotateX(titleTiltX);
   rotateY(titleTiltY);
   scale(titleScale);
-
   textFont(font);
-  textSize(min(width * 0.12, 150));
+  textSize(titleSize);
 
-  // Repeat the title in dark green layers to create 3D depth
-  for (let depth = 8; depth > 0; depth--) {
-    push();
-    translate(0, 0, -depth * 3);
-    fill("#003D25");
-    text(word, 0, 0);
-    pop();
+  for (let i = 0; i < word.length; i++) {
+    const letterWidth = widths[i];
+    const letterX = cursorX + letterWidth / 2;
+
+    // Fade a letter to white when the pointer is over it.
+    const screenLetterX =
+      width / 2 + titleX + letterX * titleScale;
+    const screenLetterY = height / 2;
+    const overLetter =
+      abs(mouseX - screenLetterX) < letterWidth * titleScale * 0.55 &&
+      abs(mouseY - screenLetterY) < titleSize * titleScale * 0.48;
+
+    titleHover[i] = lerp(titleHover[i], overLetter ? 1 : 0, 0.16);
+
+    // Dark green repeated faces create the title's extruded 3D edge.
+    for (let depth = 8; depth > 0; depth--) {
+      push();
+      translate(0, 0, -depth * 3);
+      fill("#003D25");
+      text(word[i], letterX, 0);
+      pop();
+    }
+
+    // Blend each letter from green to white while it is hovered.
+    const greenFace = color("#00A65A");
+    const whiteFace = color("#F0E9D8");
+    const faceColor = lerpColor(greenFace, whiteFace, titleHover[i]);
+
+    if (pulse > 0.1) {
+      fill(lerpColor(faceColor, whiteFace, pulse));
+    } else {
+      fill(faceColor);
+    }
+
+    text(word[i], letterX, 0);
+    cursorX += letterWidth;
   }
 
-  // Change the front color briefly when space is pressed
-  if (pulse > 0.1) {
-    fill("#F0E9D8");
-  } else {
-    fill("#00A65A");
-  }
-
-  text(word, 0, 0);
   pop();
 }
 
 function drawPrompt() {
-  // Display the interaction prompt at the bottom
   push();
   translate(0, 0, 30);
-
   fill(0, 0, 95, 85);
   textFont(font);
   textSize(16);
   text("Move your mouse or press space", 0, height / 2 - 45);
-
   pop();
+}
+
+function getTitleSize() {
+  // Scale the title down when needed so the full word fits the canvas.
+  textFont(font);
+  textSize(100);
+  const widthAt100 = textWidth(word);
+  return min(150, (width * 0.9 * 100) / widthAt100);
+}
+
+function getTitleWidth(size) {
+  textFont(font);
+  textSize(size);
+  return textWidth(word);
+}
+
+function getLetterWidths(size) {
+  textFont(font);
+  textSize(size);
+
+  const widths = [];
+  for (let i = 0; i < word.length; i++) {
+    widths.push(textWidth(word[i]));
+  }
+  return widths;
 }
 
 function keyPressed() {
   if (key === " ") {
-    pulse = 1; // Trigger the title pulse
+    pulse = 1;
 
-    // Play the music once if it is not already playing
-    if (!music.isPlaying()) {
+    // Play the music if it is not already playing.
+    if (music && !music.isPlaying()) {
       userStartAudio();
       music.play();
     }
 
-    return false; // Prevent the browser from scrolling
+    return false;
   }
 }
 
 function windowResized() {
-  // Resize the canvas and rebuild the image grid
   resizeCanvas(windowWidth, windowHeight);
-  preparePortraitText();
+
+  if (portrait) {
+    preparePortraitText();
+  }
 }

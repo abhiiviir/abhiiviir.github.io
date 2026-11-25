@@ -28,6 +28,7 @@ Be honest and specific.
 - "I'm creating a new project. This is based on same workflow and ideas as earlier projects, similar code, writing style and simplicity. Focused on efficiency, clarity and concise relevance to the questions asked. The main focus is Typography, which is reactive to mouse movement and has an image in the background which consists of letters."
 - "Show me a step-by-step process on how to move forward with this project. I need to understand the problems and bugs. Whenever I type "Next" move forward."
 - "Explain each code snippet with comments in the code itself. Keep it simple, based on our earlier exercises and knowledge of basic p5.js workflows."
+- "A small area of background text near the title’s left corners moves slightly back in depth – create a shallow bend without separating the letters into a large gap."
 
 ### What was your own contribution?
 
@@ -59,11 +60,11 @@ Be honest and specific.
 
 ### How did you use them?
 
-- I used AI to build a base structure of code, which I could build on. I used the code from an earlier exercise to build my background, and then worked on implementing my core idea into the base structure. I made sketches and sent screenshots of my inspiration to ChatGPT so it could visualise my ideas and then built the rough draft from there. It also helped with implementing sound and the "fishing" part of my project. This was originally a typography project, but after realising that I drifted away too much, i decided on implementing data visualisation at the end of it.
+- I used AI to build a base structure of code, which I could build on. I used the code from an earlier exercise to build my background, and then worked on implementing my core idea into the base structure. I made sketches and sent screenshots of my inspiration to ChatGPT so it could visualise my ideas and then built the rough draft from there. It also helped with implementing sound and the "fishing" part of my project. This was originally a typography project, but after realising that I drifted away too much, i decided on implementing data visualisation at the end of it. I used AI more heavily towards the end of the project, to create a data set for overfishing and a graph where I then eventually changed the values and effects.
 
 ### What was your own contribution?
 
-- I made sketches and sent screenshots of my inspiration to ChatGPT so it could visualise my ideas and then built the rough draft from there. The main idea came to me while creating the waves in the coordinate system exercise we had completed earlier. I thought fishing would be a cool idea, and in the end it could also work well with data visualisation.
+- I made sketches and sent screenshots of my inspiration to ChatGPT so it could visualise my ideas and then built the rough draft from there. The main idea came to me while creating the waves in the coordinate system exercise we had completed earlier. I thought fishing would be a cool idea, and in the end it could also work well with data visualisation. The idea of implementing overfishing was always there in the background, but after talking to Vera, i decided to change the workflow and force the data interaction at the end, after catching two fish. They're also explicitly labeled as "caught the last: goldfish" emphasizing "last" here, to slightly indicate what i'm doing is wrong.
 
 ### Reflection
 
