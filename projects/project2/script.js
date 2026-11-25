@@ -52,12 +52,18 @@ async function setup() {
   catchSound.amp(0.6);
 
   // Read the annual series from the CSV file beside this sketch.
-  const table = await loadTable("assets/overfishing_europe.csv", ",", "header");
+  const table = await loadTable(
+    "assets/overfishing_europe.csv",
+    ",",
+    "header"
+  );
+
   for (let row = 0; row < table.getRowCount(); row++) {
     const sustainableText = table.getString(
       row,
       "sustainably_exploited_percent"
     );
+
     const pressureText = table.getString(
       row,
       "overfishing_pressure_proxy_percent"
@@ -144,19 +150,23 @@ function drawTitleScreen() {
 
   fill(0, 0, 90);
   textSize(18);
-  text("Press space to begin", 0, height / 2 - 55);
+
+  // Keep the start prompt comfortably above the bottom edge.
+  text("Press space to begin", 0, height / 2 - 85);
 }
 
 function drawGameTitle() {
   fill(0, 0, 100);
   textFont(titleFont);
   textSize(min(width * 0.05, 72));
-  text("What's the Catch?", 0, -height / 2 + 75);
+
+  // Add more breathing room above the title.
+  text("What's the Catch?", 0, -height / 2 + 110);
 }
 
 function drawCatchLetters() {
-  const titleY = -height / 2 + 75;
-  const promptY = height / 2 - 65;
+  const titleY = -height / 2 + 110;
+  const promptY = height / 2 - 95;
   const catchY = (titleY + promptY) / 2;
 
   textSize(64);
@@ -189,7 +199,7 @@ function drawFish() {
 
   // Grow the fish into view.
   if (scene === "fish") {
-    fishScale = min(fishScale + 0.03, 1);
+    fishScale = min(fishScale + 0.03, 1.5);
   }
 
   // Animate the fish popping up and shrinking away when caught.
@@ -217,9 +227,13 @@ function drawFish() {
   push();
   translate(0, fishY, 0);
 
-  if (currentFish === 1) {
-    rotateX(PI);
-  }
+  if (currentFish === 0) {
+  // Goldfish: this rotation corrects its exported orientation.
+  rotateX(PI);
+} else {
+  // Angler: try flipping around its local Z axis.
+  rotateZ(PI);
+}
 
   rotateY(frameCount * 0.02);
   scale(fishScale * 1.5);
@@ -244,20 +258,20 @@ function drawCaughtScreen() {
 
   fill(185, 45, 100, caughtOpacity);
   textSize(min(width * 0.03, 64));
-  text("You just caught:", 0, -height * 0.3);
+  text("You just caught:", 0, -height * 0.27);
 
   fill(0, 0, 100, caughtOpacity);
   textSize(32);
-  text(caughtName + "!", 0, -height * 0.22);
+  text(caughtName + "!", 0, -height * 0.18);
   pop();
 
   const nextPrompt = fishCaughtCount < 2
     ? "Press space to catch the second fish"
-    : "Press space to explore the overfishing data";
+    : "Press space to learn more";
 
   fill(0, 0, 85, caughtOpacity);
   textSize(16);
-  text(nextPrompt, 0, height / 2 - 42);
+  text(nextPrompt, 0, height / 2 - 78);
 
   drawCaughtSpecimen();
   drawFishStats();
@@ -272,9 +286,13 @@ function drawCaughtSpecimen() {
   push();
   translate(fishX, 0, 0);
 
-  if (currentFish === 1) {
-    rotateX(PI);
-  }
+  if (currentFish === 0) {
+  // Goldfish: this rotation corrects its exported orientation.
+  rotateX(PI);
+} else {
+  // Angler: try flipping around its local Z axis.
+  rotateZ(PI);
+}
 
   rotateY(frameCount * 0.01);
   scale(specimenScale * 0.85);
@@ -470,7 +488,9 @@ function drawOverfishingChart() {
     text(year, x, bottom + 22);
   }
 
-  const selected = overfishingData.find(row => row.year === selectedYear);
+  const selected = overfishingData.find(
+    row => row.year === selectedYear
+  );
   const valueY = top - 34;
 
   if (selected && selected.pressure !== null) {
