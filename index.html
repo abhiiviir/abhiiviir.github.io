@@ -9,8 +9,20 @@
   <link rel="icon" type="image/x-icon" href="favicon/favicon.ico" />
   <style>
     @font-face {
-      font-family: "Suisse";
-      src: url("fonts/Suisse.ttf") format("truetype");
+      font-family: "Inter";
+      src: url("fonts/Inter.ttf") format("truetype");
+    }
+
+    /* --- Font for Project 1 (left / top half) --- */
+    @font-face {
+      font-family: "Poleno";
+      src: url("fonts/PolenoDEMO-Bold.otf") format("opentype");
+    }
+
+    /* --- Font for Project 2 (right / bottom half) --- */
+    @font-face {
+      font-family: "PP Formula";
+      src: url("fonts/PPFormula-Medium.otf") format("opentype");
     }
 
     * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -18,7 +30,7 @@
     html, body { height: 100%; }
 
     body {
-      font-family: "Suisse", -apple-system, system-ui, sans-serif;
+      font-family: "Inter", -apple-system, system-ui, sans-serif;
     }
 
     .split {
@@ -49,21 +61,86 @@
       transition: transform 0.6s ease;
     }
 
+    /* dark overlay to make the label more legible */
+    .half::after {
+      content: "";
+      position: absolute;
+      inset: 0;
+      background: rgba(0, 0, 0, 0.5); /* increase the last number for a darker image */
+      pointer-events: none;
+    }
+
     .half:hover::before {
       transform: scale(1.03);
     }
 
+    /* wrapper holding title + info text */
+    .content {
+      position: relative;
+      z-index: 1;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      text-align: center;
+      padding: 0 2rem;
+      pointer-events: none;
+    }
+
+    /* shared label defaults */
     .label {
       position: relative;
       z-index: 1;
       color: #fff;
-      mix-blend-mode: difference;
-      font-size: 6rem;
-      font-weight: 800;
-      letter-spacing: 0.03em;
+      font-size: 4rem;
+      font-weight: 400;
+      letter-spacing: -0.02em;
       text-decoration: none;
       pointer-events: none;
       transition: transform 0.4s ease;
+    }
+
+    /* shared info text defaults */
+    .info {
+      color: #fff;
+      font-size: 1.1rem;
+      font-weight: 400;
+      line-height: 1.4;
+      max-width: 28ch;
+      margin-top: 1rem;
+    }
+
+    /* --- Project 1 label + info --- */
+    .half:nth-child(1) .label {
+      font-family: "Poleno", "PolenoDemo-Bold.otf", sans-serif;
+      /*font-size: 5rem; */
+      /* letter-spacing: -0.02em; */
+      color: #00A65A;
+      /* translate: 0 0; */
+    }
+
+    .half:nth-child(1) .info {
+      font-family: "Poleno", "PolenoDemo-Bold.otf", sans-serif;
+      font-weight: 200;
+      letter-spacing: 0.05em;
+      /* max-width: 28ch; */
+      /* margin-top: 1rem; */
+    }
+
+    /* --- Project 2 label + info --- */
+    .half:nth-child(2) .label {
+      font-family: "PP Formula", "PPFormula-Medium.otf", sans-serif;
+      font-weight: 600;
+      /* font-size: 5rem; */
+      /* letter-spacing: -0.02em; */
+      /* color: #fff; */
+      /* translate: 0 0; */
+    }
+
+    .half:nth-child(2) .info {
+      font-family: "PP Formula", "PPFormula-Medium.otf", sans-serif;
+      font-weight: 200;
+      /* max-width: 28ch; */
+      /* margin-top: 1rem; */
     }
 
     .half:hover .label {
@@ -73,6 +150,7 @@
     @media (max-width: 600px) {
       .split { flex-direction: column; }
       .label { font-size: 5rem; }
+      .info { font-size: 1rem; }
     }
   </style>
 </head>
@@ -80,12 +158,18 @@
 <body>
   <div class="split">
     <a class="half" href="./projects/project1/index.html"
-       style="background-image: url('./projects/project1/thumbnail.png')">
-      <span class="label">Project 1</span>
+       style="background-image: url('./projects/project1/giphy.gif')">
+      <div class="content">
+        <span class="label">Chromakopia</span>
+        <p class="info">Tilt and transform the title in interactive 3D typography.</p>
+      </div>
     </a>
     <a class="half" href="./projects/project2/index.html"
-       style="background-image: url('./projects/project2/thumbnail.png')">
-      <span class="label">Project 2</span>
+       style="background-image: url('./projects/project2/giphy.gif')">
+      <div class="content">
+        <span class="label">What's the Catch?</span>
+        <p class="info">Go fishing in the ocean and learn more about them.</p>
+      </div>
     </a>
   </div>
 </body>

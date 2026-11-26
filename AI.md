@@ -19,7 +19,7 @@ Be honest and specific.
 
 <!-- Where did AI help? Ideas, writing/debugging code, creating visual or audio assets, explaining a concept, refactoring, … -->
 
-- AI helped in the complexity of my project, such as the pulsating of the main text, and the exact design of the image in the background, which is made out of the letters. It helped me figure out the specifics of sound in p5.js and how to enable all the features and fixing bugs. The rest of the ideas were mainly from projects we handled in the lessons itself, such as typography and reactivity when "mouse-pressed".
+- AI helped in the complexity of my project, such as the pulsating of the main text, and the exact design of the image in the background, which is made out of the letters. It helped me figure out the specifics of sound in p5.js and how to enable all the features and fixing bugs. The rest of the ideas were mainly from projects we handled in the lessons itself, such as typography and reactivity when "mouse-pressed". It also helped me at the end, when I decided to add a new feature where the typography breaks, after spamming the spacebar. 
 
 ### How did you use them?
 
@@ -52,7 +52,7 @@ Be honest and specific.
 
 ### Which tools did you use?
 
--  I only used ChatGPT, nothing else.
+-  I only used ChatGPT and Claude towards the end.
 
 ### What did you use them for?
 
@@ -60,7 +60,7 @@ Be honest and specific.
 
 ### How did you use them?
 
-- I used AI to build a base structure of code, which I could build on. I used the code from an earlier exercise to build my background, and then worked on implementing my core idea into the base structure. I made sketches and sent screenshots of my inspiration to ChatGPT so it could visualise my ideas and then built the rough draft from there. It also helped with implementing sound and the "fishing" part of my project. This was originally a typography project, but after realising that I drifted away too much, i decided on implementing data visualisation at the end of it. I used AI more heavily towards the end of the project, to create a data set for overfishing and a graph where I then eventually changed the values and effects.
+- I used AI to build a base structure of code, which I could build on. I used the code from an earlier exercise to build my background, and then worked on implementing my core idea into the base structure. I made sketches and sent screenshots of my inspiration to ChatGPT so it could visualise my ideas and then built the rough draft from there. It also helped with implementing sound and the "fishing" part of my project. This was originally a typography project, but after realising that I drifted away too much, i decided on implementing data visualisation at the end of it. I used AI more heavily towards the end of the project, to create a data set for overfishing and a graph where I then eventually changed the values and effects. I also made it uplift the experience a bit, with the bubble effects and reactivity in general, such as the title effect.
 
 ### What was your own contribution?
 

@@ -25,6 +25,21 @@ let pulse = 0;
 // White hover highlight fades smoothly instead of switching abruptly.
 let titleHover = [];
 
+// --- Title break / rebuild ---
+// "intact"     -> normal title
+// "broken"     -> letters are falling / have fallen
+// "rebuilding" -> letters are flying back into place
+let titleState = "intact";
+let letters = [];            // physics state for each letter
+let spaceCount = 0;          // quick spacebar presses so far
+let lastSpaceTime = 0;       // time of the last spacebar press
+let titleWarp = 1;           // background warp fades out while the title is broken
+let shake = 0;               // screen shake when the title breaks
+
+const spamThreshold = 2;     // break on the 3rd quick press
+const spamWindow = 1200;     // ms allowed between presses to count as spamming
+const gravity = 1.1;         // higher = faster fall
+
 async function setup() {
   createCanvas(windowWidth, windowHeight, WEBGL);
   textAlign(CENTER, CENTER);
@@ -39,6 +54,7 @@ async function setup() {
   textFont(font);
   music.amp(0.35);
   titleHover = Array(word.length).fill(0);
+  resetLetters();
   preparePortraitText();
 }
 
@@ -68,16 +84,140 @@ function preparePortraitText() {
   }
 }
 
+// Every letter starts at rest: no offset, no rotation, no velocity.
+function resetLetters() {
+  letters = [];
+  for (let i = 0; i < word.length; i++) {
+    letters.push({
+      ox: 0, oy: 0, oz: 0,        // offset from the letter's home position
+      rx: 0, ry: 0, rz: 0,        // rotation
+      vx: 0, vy: 0, vz: 0,        // velocity
+      vrx: 0, vry: 0, vrz: 0,     // rotation speed
+      delay: 0                    // frames to wait before moving
+    });
+  }
+}
+
+function breakTitle() {
+  titleState = "broken";
+  shake = 1;
+  pulse = 1;
+
+  for (let i = 0; i < letters.length; i++) {
+    const l = letters[i];
+    // Letters on the left drift left, letters on the right drift right.
+    const side = map(i, 0, letters.length - 1, -1, 1);
+
+    l.vx = side * random(1, 4) + random(-1.5, 1.5);
+    l.vy = random(-16, -6);          // small upward pop before the fall
+    l.vz = random(2, 14);
+    l.vrx = random(-0.18, 0.18);
+    l.vry = random(-0.18, 0.18);
+    l.vrz = random(-0.22, 0.22);
+    l.delay = floor(random(0, 14));  // staggered, so they don't all drop at once
+  }
+}
+
+function rebuildTitle() {
+  titleState = "rebuilding";
+
+  for (let i = 0; i < letters.length; i++) {
+    const l = letters[i];
+
+    // Wrap rotations so the letters don't unwind through many spins.
+    l.rx = wrapAngle(l.rx);
+    l.ry = wrapAngle(l.ry);
+    l.rz = wrapAngle(l.rz);
+    l.delay = i * 3;                 // letters return one after another
+  }
+}
+
+function wrapAngle(angle) {
+  return ((angle + PI) % TWO_PI + TWO_PI) % TWO_PI - PI;
+}
+
+// True once every letter has dropped below the bottom of the screen.
+function allLettersFallen() {
+  return letters.every((l) => l.oy > height * 0.7);
+}
+
+function updateLetters() {
+  if (titleState === "broken") {
+    for (const l of letters) {
+      if (l.delay > 0) {
+        l.delay--;
+        continue;
+      }
+
+      // Once a letter is far below the screen, stop simulating it.
+      if (l.oy > height * 1.5) continue;
+
+      l.vy += gravity;
+      l.ox += l.vx;
+      l.oy += l.vy;
+      l.oz += l.vz;
+      l.rx += l.vrx;
+      l.ry += l.vry;
+      l.rz += l.vrz;
+    }
+  }
+
+  if (titleState === "rebuilding") {
+    let allHome = true;
+
+    for (const l of letters) {
+      if (l.delay > 0) {
+        l.delay--;
+        allHome = false;
+        continue;
+      }
+
+      // Ease everything back toward the original position and angle.
+      l.ox = lerp(l.ox, 0, 0.12);
+      l.oy = lerp(l.oy, 0, 0.12);
+      l.oz = lerp(l.oz, 0, 0.12);
+      l.rx = lerp(l.rx, 0, 0.12);
+      l.ry = lerp(l.ry, 0, 0.12);
+      l.rz = lerp(l.rz, 0, 0.12);
+
+      const distance = abs(l.ox) + abs(l.oy) + abs(l.oz);
+      const spin = abs(l.rx) + abs(l.ry) + abs(l.rz);
+
+      if (distance > 0.5 || spin > 0.01) {
+        allHome = false;
+      }
+    }
+
+    // When every letter has arrived, snap them into place and finish.
+    if (allHome) {
+      resetLetters();
+      titleState = "intact";
+      pulse = 1;
+    }
+  }
+}
+
 function draw() {
   background("#06120D");
 
   // Update the title first so the background warp follows its current position.
   updateTitleMotion();
+  updateLetters();
+
+  push();
+
+  // Brief screen shake when the title breaks.
+  if (shake > 0) {
+    translate(random(-1, 1) * shake * 14, random(-1, 1) * shake * 14, 0);
+    shake = max(0, shake - 0.04);
+  }
 
   // Draw the portrait first, so it remains behind the main title.
   drawTextPortrait();
   drawTitle();
   drawPrompt();
+
+  pop();
 
   // The spacebar pulse eases away over time.
   pulse = max(0, pulse - 0.025);
@@ -100,6 +240,10 @@ function updateTitleMotion() {
   titleTiltY = lerp(titleTiltY, targetTiltY, 0.1);
   titleX = lerp(titleX, targetX, 0.06);
   titleY = lerp(titleY, targetY, 0.06);
+
+  // The background only bends around the title while the title exists.
+  const targetWarp = titleState === "broken" ? 0 : 1;
+  titleWarp = lerp(titleWarp, targetWarp, 0.08);
 }
 
 function drawTextPortrait() {
@@ -138,8 +282,10 @@ function drawTextPortrait() {
     const warpRadius = max(70, titleSize * 0.28);
     const warpStrength =
       1 - constrain(distanceFromTitle / warpRadius, 0, 1);
+
+    // titleWarp fades the whole effect out while the title is broken.
     const smoothWarp =
-      warpStrength * warpStrength * (3 - 2 * warpStrength);
+      warpStrength * warpStrength * (3 - 2 * warpStrength) * titleWarp;
 
     // The tilted title pushes the background farther back on its receding side.
     const localTitleX = cell.x - titleX;
@@ -150,7 +296,7 @@ function drawTextPortrait() {
       localTitleX * sin(titleTiltY)
     );
 
-      // Push the background fully behind the title across its rounded footprint.
+    // Push the background fully behind the title across its rounded footprint.
     const tiltAmount = abs(titleTiltX) + abs(titleTiltY);
     const zPushBack = smoothWarp * (110 + tiltAmount * 50);
 
@@ -203,25 +349,34 @@ function drawTitle() {
   for (let i = 0; i < word.length; i++) {
     const letterWidth = widths[i];
     const letterX = cursorX + letterWidth / 2;
+    const l = letters[i];
 
-    // Fade a letter toward white when the pointer is over it.
+    // Only react to the pointer while the title is whole.
     const screenLetterX =
       width / 2 + titleX + letterX * titleScale;
     const screenLetterY =
       height / 2 + titleY;
 
     const overLetter =
+      titleState === "intact" &&
       abs(mouseX - screenLetterX) < letterWidth * titleScale * 0.55 &&
       abs(mouseY - screenLetterY) < titleSize * titleScale * 0.48;
 
     titleHover[i] = lerp(titleHover[i], overLetter ? 1 : 0, 0.16);
+
+    // Each letter moves and spins on its own while falling or rebuilding.
+    push();
+    translate(letterX + l.ox, l.oy, l.oz);
+    rotateX(l.rx);
+    rotateY(l.ry);
+    rotateZ(l.rz);
 
     // Dark green repeated faces create the title's extruded 3D edge.
     for (let depth = 8; depth > 0; depth--) {
       push();
       translate(0, 0, -depth * 3);
       fill("#003D25");
-      text(word[i], letterX, 0);
+      text(word[i], 0, 0);
       pop();
     }
 
@@ -236,7 +391,9 @@ function drawTitle() {
       fill(faceColor);
     }
 
-    text(word[i], letterX, 0);
+    text(word[i], 0, 0);
+    pop();
+
     cursorX += letterWidth;
   }
 
@@ -249,7 +406,13 @@ function drawPrompt() {
   fill(0, 0, 95, 85);
   textFont(font);
   textSize(16);
-  text("Move your mouse or press space", 0, height / 2 - 45);
+
+  const message =
+    titleState === "broken"
+      ? (allLettersFallen() ? "Press space to rebuild the title" : "")
+      : "Move your mouse or press space";
+
+  text(message, 0, height / 2 - 45);
   pop();
 }
 
@@ -288,6 +451,27 @@ function keyPressed() {
     if (music && !music.isPlaying()) {
       userStartAudio();
       music.play();
+    }
+
+    if (titleState === "broken") {
+      // Only rebuild after the letters have finished falling.
+      if (allLettersFallen()) {
+        rebuildTitle();
+        spaceCount = 0;
+      }
+    } else if (titleState === "intact") {
+      // Count presses, but start over if you pause for too long.
+      const now = millis();
+      if (now - lastSpaceTime > spamWindow) {
+        spaceCount = 0;
+      }
+      lastSpaceTime = now;
+      spaceCount++;
+
+      if (spaceCount > spamThreshold) {
+        breakTitle();
+        spaceCount = 0;
+      }
     }
 
     return false;

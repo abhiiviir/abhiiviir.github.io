@@ -11,10 +11,29 @@ let scene = "title";
 let titleTiltX = 0;
 let titleTiltY = 0;
 
+// --- Bubble amount (lower = calmer) ---
+const bubbleMax = 35;          // most bubbles allowed on screen at once
+const trailEvery = 9;          // cursor trail: one bubble every N frames while moving
+const trailMinSpeed = 6;       // mouse must move at least this fast to leave a trail
+const seabedEvery = 70;        // a bubble rises from the seabed every N frames
+
+// --- Shared "lively" state (used on every screen) ---
+let bubbles = [];             // rising bubbles (cursor trail + seabed)
+let ripples = [];             // expanding rings from clicks, key presses, popped bubbles
+let mouseEnergy = 0;          // smoothed mouse speed, speeds up spins and bubbles
+let wantHand = false;         // set by hover checks, applied at the start of the next frame
+let fishLookX = 0;            // smoothed cursor position (-1 to 1), fish tilt toward it
+let fishLookY = 0;
+let fishSpin = 0;
+let specimenSpin = 0;
+let fishHover = 0;
+const reactiveInfluence = {}; // per-letter cursor influence, keyed by text id
+
 let catchWord = "CATCH";
 let lettersShown = 0;
 let letterY = [];
 let letterSpeed = [];
+let letterPop = [];
 let lettersFalling = false;
 
 let currentFish = 0; // 0 = goldfish, 1 = anglerfish
@@ -29,13 +48,17 @@ let statHover = [];
 // This slider changes the displayed model size on the caught screen.
 let specimenScale = 0.85;
 let specimenSliderDragging = false;
+let specimenKnob = 18;
 const specimenScaleMin = 0.4;
 const specimenScaleMax = 1.0;
 
 // Timeline data is read from overfishing_europe.csv.
 let overfishingData = [];
 let selectedYear = 2003;
+let lastYear = 2003;
+let valuePop = 0;
 let yearSliderDragging = false;
+let yearKnob = 20;
 let transitionProgress = 0;
 let chartReveal = 1;
 
@@ -83,7 +106,21 @@ async function setup() {
 }
 
 function draw() {
+  // Hover checks from the previous frame decide the cursor.
+  cursor(wantHand ? HAND : ARROW);
+  wantHand = false;
+
+  // Shared motion values that every screen can use.
+  mouseEnergy = lerp(
+    mouseEnergy,
+    min(dist(mouseX, mouseY, pmouseX, pmouseY), 40),
+    0.15
+  );
+  fishLookX = lerp(fishLookX, constrain((mouseX - width / 2) / (width / 2), -1, 1), 0.06);
+  fishLookY = lerp(fishLookY, constrain((mouseY - height / 2) / (height / 2), -1, 1), 0.06);
+
   drawOcean();
+  drawAmbientLife();
 
   if (scene === "title") {
     drawTitleScreen();
@@ -123,19 +160,197 @@ function drawOcean() {
   background("#06152A");
   noStroke();
 
+  const mx = mouseX - width / 2;
+  const my = mouseY - height / 2;
+
   // Moving rows of soft points suggest a quiet underwater current.
+  // Points near the cursor are pushed away, grow and glow.
   for (let row = 0; row < 14; row++) {
     const y = -height / 2 + row * (height / 13);
 
     for (let x = -width / 2; x < width / 2; x += 24) {
       const wave = sin(x * 0.012 + frameCount * 0.025 + row * 0.6);
-      const dotSize = 2 + (wave + 1) * 2;
+      let px = x;
+      let py = y + wave * 8;
 
-      fill(190, 55, 85, 18);
-      circle(x, y + wave * 8, dotSize);
+      const near = constrain(1 - dist(mx, my, px, py) / 150, 0, 1);
+
+      if (near > 0) {
+        const angle = atan2(py - my, px - mx);
+        px += cos(angle) * near * near * 28;
+        py += sin(angle) * near * near * 28;
+      }
+
+      const dotSize = 2 + (wave + 1) * 2 + near * 5;
+
+      fill(190 - near * 10, 55 - near * 20, 85 + near * 15, 18 + near * 55);
+      circle(px, py, dotSize);
     }
   }
 }
+
+// ---------- Shared lively helpers ----------
+
+function spawnBubbles(x, y, count, spread = 10) {
+  for (let i = 0; i < count; i++) {
+    if (bubbles.length >= bubbleMax) break;
+
+    bubbles.push({
+      x: x + random(-spread, spread),
+      y: y + random(-spread, spread) * 0.3,
+      r: random(3, 8),
+      speed: random(0.5, 1.5),
+      wobble: random(TWO_PI),
+      age: 0
+    });
+  }
+}
+
+function addRipple(x, y, maxR) {
+  // Keep the number of rings on screen under control too.
+  if (ripples.length >= 8) {
+    ripples.shift();
+  }
+
+  ripples.push({ x: x, y: y, r: 0, maxR: maxR });
+}
+
+function drawAmbientLife() {
+  const mx = mouseX - width / 2;
+  const my = mouseY - height / 2;
+
+  // A sparse bubble trail behind a moving cursor.
+  if (mouseEnergy > trailMinSpeed && frameCount % trailEvery === 0) {
+    spawnBubbles(mx, my, 1, 10);
+  }
+
+  // A few bubbles always rise from the seabed.
+  if (frameCount % seabedEvery === 0) {
+    spawnBubbles(random(-width / 2, width / 2), height / 2 + 10, 1, 0);
+  }
+
+  noFill();
+  strokeWeight(1.5);
+
+  for (let i = bubbles.length - 1; i >= 0; i--) {
+    const b = bubbles[i];
+    b.age++;
+    b.y -= b.speed;
+    b.x += sin(frameCount * 0.05 + b.wobble) * 0.4;
+
+    // Touch a bubble with the cursor and it pops (smaller touch area, no ring).
+    if (b.age > 40 && dist(mx, my, b.x, b.y) < b.r + 8) {
+      bubbles.splice(i, 1);
+      continue;
+    }
+
+    // Fade out as they rise, softer than before.
+    const alpha = map(b.y, height / 2, -height / 2, 45, 0, true);
+    stroke(185, 30, 100, alpha);
+    circle(b.x, b.y, b.r * 2);
+
+    if (b.y < -height / 2 - 20) {
+      bubbles.splice(i, 1);
+    }
+  }
+
+  for (let i = ripples.length - 1; i >= 0; i--) {
+    const rp = ripples[i];
+    rp.r += (rp.maxR - rp.r) * 0.08 + 0.6;
+
+    const alpha = map(rp.r, 0, rp.maxR, 45, 0, true);
+
+    if (alpha <= 1) {
+      ripples.splice(i, 1);
+      continue;
+    }
+
+    strokeWeight(2);
+    stroke(185, 30, 100, alpha);
+    circle(rp.x, rp.y, rp.r * 2);
+  }
+
+  noStroke();
+}
+
+// Draws a line of text where every letter drifts on its own wave and reacts
+// to the cursor: it is pushed away, moves toward the viewer, grows, tilts and
+// fades toward aqua. `strength` scales how strong the reaction is.
+function drawReactiveText(id, str, cx, cy, size, hue, sat, bri, alpha = 100, strength = 1) {
+  textFont(titleFont);
+  textSize(size);
+  textAlign(CENTER, CENTER);
+
+  const widths = [];
+  let totalWidth = 0;
+
+  for (const ch of str) {
+    const w = textWidth(ch);
+    widths.push(w);
+    totalWidth += w;
+  }
+
+  if (!reactiveInfluence[id] || reactiveInfluence[id].length !== str.length) {
+    reactiveInfluence[id] = Array(str.length).fill(0);
+  }
+
+  const influence = reactiveInfluence[id];
+  const mx = mouseX - width / 2;
+  const my = mouseY - height / 2;
+  const reach = size * 2.2;
+  let cursorX = cx - totalWidth / 2;
+
+  noStroke();
+
+  for (let i = 0; i < str.length; i++) {
+    const x = cursorX + widths[i] / 2;
+    cursorX += widths[i];
+
+    if (str[i] === " ") continue;
+
+    const d = dist(mx, my, x, cy);
+    const target = constrain(1 - d / reach, 0, 1);
+    influence[i] = lerp(influence[i], target, 0.12);
+    const inf = influence[i];
+
+    // Gentle bobbing, like floating in water.
+    const bobY = sin(frameCount * 0.04 + i * 0.55) * size * 0.07 * min(strength, 1);
+
+    // Push away from the cursor and toward the viewer.
+    let pushX = 0;
+    let pushY = 0;
+
+    if (d > 1) {
+      pushX = ((x - mx) / d) * inf * inf * 45 * strength;
+      pushY = ((cy - my) / d) * inf * inf * 45 * strength;
+    }
+
+    push();
+    translate(x + pushX, cy + bobY + pushY, inf * 90 * strength);
+    rotateZ(sin(frameCount * 0.05 + i) * inf * 0.35);
+    scale(1 + inf * 0.25);
+
+    const h = sat < 1 ? 185 : lerp(hue, 185, inf);
+    fill(h, lerp(sat, max(sat, 45), inf), bri, alpha);
+    textSize(size);
+    text(str[i], 0, 0);
+    pop();
+  }
+
+  textAlign(CENTER, CENTER);
+}
+
+// A prompt line that gently breathes and floats.
+function drawPromptText(str, y, size = 16, alpha = 90) {
+  noStroke();
+  fill(0, 0, 88, alpha * (0.75 + 0.25 * sin(frameCount * 0.07)));
+  textFont(titleFont);
+  textSize(size);
+  textAlign(CENTER, CENTER);
+  text(str, 0, y + sin(frameCount * 0.05) * 3);
+}
+
+// ---------- Title and header ----------
 
 function drawTitleScreen() {
   const targetTiltY = map(mouseX, 0, width, -0.25, 0.25);
@@ -147,36 +362,71 @@ function drawTitleScreen() {
   push();
   rotateX(titleTiltX);
   rotateY(titleTiltY);
-
-  fill(0, 0, 100);
-  textFont(titleFont);
-  textSize(min(width * 0.08, 100));
-  text("What's the Catch?", 0, 0);
+  drawReactiveText(
+    "title",
+    "What's the Catch?",
+    0,
+    0,
+    min(width * 0.08, 100),
+    0, 0, 100
+  );
   pop();
 
-  fill(0, 0, 90);
-  textSize(18);
-  text("Press space to begin", 0, height / 2 - 85);
+  drawPromptText("Press space to begin", height / 2 - 85, 18);
 }
 
 function drawGameTitle() {
-  fill(0, 0, 100);
-  textFont(titleFont);
-  textSize(min(width * 0.05, 72));
-  text("What's the Catch?", 0, -height / 2 + 110);
+  drawReactiveText(
+    "header",
+    "What's the Catch?",
+    0,
+    -height / 2 + 110,
+    min(width * 0.05, 72),
+    0, 0, 100,
+    100,
+    0.7
+  );
+}
+
+// ---------- CATCH letters ----------
+
+function catchLettersY() {
+  const titleY = -height / 2 + 110;
+  const promptY = height / 2 - 95;
+  return (titleY + promptY) / 2;
 }
 
 function drawCatchLetters() {
-  const titleY = -height / 2 + 110;
   const promptY = height / 2 - 95;
-  const catchY = (titleY + promptY) / 2;
+  const catchY = catchLettersY();
+  const mx = mouseX - width / 2;
+  const my = mouseY - height / 2;
 
+  textFont(titleFont);
   textSize(64);
-  fill(185, 45, 100);
+  noStroke();
 
   for (let i = 0; i < lettersShown; i++) {
     const letterX = (i - 2) * 50;
-    text(catchWord[i], letterX, catchY + letterY[i]);
+    const bob = lettersFalling ? 0 : sin(frameCount * 0.07 + i * 0.8) * 5;
+    const baseY = catchY + letterY[i] + bob;
+
+    // Cursor proximity and the pop from being typed both animate the letter.
+    const inf = constrain(1 - dist(mx, my, letterX, baseY) / 110, 0, 1);
+    letterPop[i] = max(0, (letterPop[i] || 0) - 0.04);
+    const popAmount = letterPop[i];
+
+    // Letters tumble as they fall.
+    const tumble = lettersFalling ? letterSpeed[i] * 0.02 * (i % 2 === 0 ? 1 : -1) : 0;
+
+    push();
+    translate(letterX, baseY - inf * 10, inf * 60 + popAmount * 40);
+    rotateZ(sin(frameCount * 0.06 + i) * inf * 0.3 + tumble);
+    scale(1 + inf * 0.25 + popAmount * 0.6);
+    fill(185, lerp(45, 15, inf), 100);
+    textSize(64);
+    text(catchWord[i], 0, 0);
+    pop();
 
     // Gravity speeds up each letter's fall.
     if (lettersFalling) {
@@ -185,9 +435,7 @@ function drawCatchLetters() {
     }
   }
 
-  fill(0, 0, 85);
-  textSize(16);
-  text("Press space to catch something...", 0, promptY);
+  drawPromptText("Press space to catch something...", promptY, 16, 85);
 
   // Reveal the fish once the falling letters leave the screen.
   if (lettersFalling && letterY[0] > height) {
@@ -196,12 +444,17 @@ function drawCatchLetters() {
   }
 }
 
+// ---------- Fish ----------
+
 function drawFish() {
   let fishY = 0;
+  const mx = mouseX - width / 2;
+  const my = mouseY - height / 2;
 
-  // Grow the fish into view.
+  // Grow the fish into view, floating gently while it waits to be caught.
   if (scene === "fish") {
     fishScale = min(fishScale + 0.03, 1.5);
+    fishY = sin(frameCount * 0.05) * 10;
   }
 
   // Animate the fish popping up and shrinking away when caught.
@@ -223,11 +476,30 @@ function drawFish() {
     }
   }
 
+  // The fish swells slightly and the cursor becomes a hand when hovering it.
+  const overFish = scene === "fish" && dist(mx, my, 0, 0) < 190;
+  fishHover = lerp(fishHover, overFish ? 1 : 0, 0.12);
+
+  if (overFish) {
+    wantHand = true;
+  }
+
+  if (scene === "fish" && fishScale >= 1.4) {
+    drawPromptText("Click the fish to catch it", height / 2 - 95, 16, 85);
+  }
+
+  // The fish spins faster when the mouse moves.
+  fishSpin += 0.02 + mouseEnergy * 0.003;
+
   ambientLight(0, 0, 100);
   directionalLight(0, 0, 100, -1, 1, -1);
 
   push();
-  translate(0, fishY, 0);
+  translate(mx * 0.05, fishY, 0);
+
+  // Lean toward the cursor.
+  rotateX(fishLookY * 0.3);
+  rotateZ(-fishLookX * 0.2);
 
   if (currentFish === 0) {
     rotateX(PI);
@@ -235,8 +507,8 @@ function drawFish() {
     rotateZ(PI);
   }
 
-  rotateY(frameCount * 0.02);
-  scale(fishScale * 1.5);
+  rotateY(fishSpin);
+  scale(fishScale * 1.5 * (1 + fishHover * 0.08));
 
   // Let each model use the materials referenced by its OBJ file.
   if (currentFish === 0) {
@@ -248,6 +520,8 @@ function drawFish() {
   pop();
 }
 
+// ---------- Caught screen ----------
+
 function drawCaughtScreen() {
   caughtOpacity = min(caughtOpacity + 4, 100);
   caughtScale = min(caughtScale + 0.025, 1);
@@ -258,22 +532,39 @@ function drawCaughtScreen() {
   push();
   scale(caughtScale);
 
-  fill(185, 45, 100, caughtOpacity);
-  textSize(min(width * 0.04, height < 520 ? 30 : 42));
-  text("You just caught:", 0, headlineY);
+  drawReactiveText(
+    "caughtLabel",
+    "You just caught:",
+    0,
+    headlineY,
+    min(width * 0.04, height < 520 ? 30 : 42),
+    185, 45, 100,
+    caughtOpacity,
+    0.6
+  );
 
-  fill(0, 0, 100, caughtOpacity);
-  textSize(height < 520 ? 24 : 32);
-  text(caughtName + "!", 0, headlineY + (height < 520 ? 34 : 60));
+  drawReactiveText(
+    "caughtName",
+    caughtName + "!",
+    0,
+    headlineY + (height < 520 ? 34 : 60),
+    height < 520 ? 24 : 32,
+    0, 0, 100,
+    caughtOpacity,
+    0.6
+  );
   pop();
 
   const nextPrompt = fishCaughtCount < 2
     ? "Press space to catch the second fish"
     : "Press space to learn more";
 
-  fill(0, 0, 85, caughtOpacity);
-  textSize(16);
-  text(nextPrompt, 0, height / 2 - (height < 520 ? 18 : 78));
+  drawPromptText(
+    nextPrompt,
+    height / 2 - (height < 520 ? 18 : 78),
+    16,
+    caughtOpacity * 0.85
+  );
 
   drawCaughtSpecimen();
   drawFishStats();
@@ -282,11 +573,16 @@ function drawCaughtScreen() {
 function drawCaughtSpecimen() {
   const fishX = -width * 0.29;
 
+  // The specimen turns faster with mouse movement and leans toward the cursor.
+  specimenSpin += 0.01 + mouseEnergy * 0.002;
+
   ambientLight(0, 0, 100);
   directionalLight(0, 0, 100, -1, 1, -1);
 
   push();
-  translate(fishX, 0, 0);
+  translate(fishX, sin(frameCount * 0.03) * 8, 0);
+  rotateX(fishLookY * 0.25);
+  rotateZ(-fishLookX * 0.15);
 
   if (currentFish === 0) {
     rotateX(PI);
@@ -294,7 +590,7 @@ function drawCaughtSpecimen() {
     rotateZ(PI);
   }
 
-  rotateY(frameCount * 0.01);
+  rotateY(specimenSpin);
   scale(specimenScale * 0.85);
 
   // Draw the selected fish model on the specimen page.
@@ -322,6 +618,22 @@ function drawSpecimenSlider(fishX) {
     rightEdge
   );
 
+  // The knob grows when hovered and more when dragged.
+  const mx = mouseX - width / 2;
+  const my = mouseY - height / 2;
+  const hovering =
+    abs(my - sliderY) < 20 && mx >= leftEdge && mx <= rightEdge;
+
+  if (hovering || specimenSliderDragging) {
+    wantHand = true;
+  }
+
+  specimenKnob = lerp(
+    specimenKnob,
+    specimenSliderDragging ? 28 : hovering ? 23 : 18,
+    0.2
+  );
+
   // Estimate the fish's reference length from the slider position.
   const maxLengthCm = currentFish === 0 ? 48 : 200;
   const referenceLengthCm = round(maxLengthCm * specimenScale);
@@ -344,8 +656,11 @@ function drawSpecimenSlider(fishX) {
   fill(195, 75, 95, caughtOpacity);
   rect((leftEdge + knobX) / 2, sliderY, knobX - leftEdge, 6, 3);
 
+  fill(195, 60, 100, caughtOpacity * 0.2);
+  circle(knobX, sliderY, specimenKnob + 12);
+
   fill(0, 0, 100, caughtOpacity);
-  circle(knobX, sliderY, 18);
+  circle(knobX, sliderY, specimenKnob);
 
   fill(0, 0, 78, caughtOpacity);
   textSize(10);
@@ -411,40 +726,63 @@ function drawFishStats() {
       statHover[i]
     );
 
+    // A hovered row slides toward the fish and lifts slightly.
+    const slide = statHover[i] * 10;
+
+    push();
+    translate(0, 0, statHover[i] * 8);
     noStroke();
     fill(rowColor);
-    rect(panelCenterX, y, panelWidth, rowHeight, 10);
+    rect(panelCenterX + slide, y, panelWidth, rowHeight, 10);
 
     textAlign(LEFT, CENTER);
     fill(0, 0, 100, caughtOpacity);
     textSize(11);
-    text(facts[i][0], leftX + 14, y);
+    text(facts[i][0], leftX + 14 + slide, y);
 
     textAlign(RIGHT, CENTER);
     textSize(14);
-    text(facts[i][1], leftX + panelWidth - 14, y);
+    text(facts[i][1], leftX + panelWidth - 14 + slide, y);
+    pop();
   }
 
   textAlign(CENTER, CENTER);
 }
 
+// ---------- Data screen ----------
+
 function drawOverfishingScreen() {
-  fill(0, 0, 100);
-  textFont(titleFont);
-  textSize(min(width * 0.055, 64));
-  text("The Cost Of Your Catch", 0, -height * 0.40);
+  drawReactiveText(
+    "cost",
+    "The Cost Of Your Catch",
+    0,
+    -height * 0.40,
+    min(width * 0.055, 64),
+    0, 0, 100,
+    100,
+    0.6
+  );
 
   drawOverfishingChart();
   drawYearSlider();
   drawDataSourceNote();
 }
 
-function drawOverfishingChart() {
+function chartBounds() {
   const chartWidth = min(width * 0.76, 900);
-  const left = -chartWidth / 2;
-  const right = chartWidth / 2;
-  const top = -height * 0.22;
-  const bottom = height * 0.16;
+
+  return {
+    left: -chartWidth / 2,
+    right: chartWidth / 2,
+    top: -height * 0.22,
+    bottom: height * 0.16
+  };
+}
+
+function drawOverfishingChart() {
+  const { left, right, top, bottom } = chartBounds();
+  const mx = mouseX - width / 2;
+  const my = mouseY - height / 2;
 
   // Draw a quiet grid and percentage scale.
   stroke(0, 0, 100, 20);
@@ -470,36 +808,79 @@ function drawOverfishingChart() {
     row => row.pressure !== null && row.year <= revealYear
   );
 
+  // A soft glow under the line, then the line itself.
   noFill();
+  stroke(190, 70, 95, 15);
+  strokeWeight(10);
+  beginShape();
+
+  for (const row of observations) {
+    vertex(
+      map(row.year, 2000, 2026, left, right),
+      map(row.pressure, 0, 100, bottom, top)
+    );
+  }
+
+  endShape();
+
   stroke(190, 70, 95);
   strokeWeight(3);
   beginShape();
 
   for (const row of observations) {
-    const x = map(row.year, 2000, 2026, left, right);
-    const y = map(row.pressure, 0, 100, bottom, top);
-    vertex(x, y);
+    vertex(
+      map(row.year, 2000, 2026, left, right),
+      map(row.pressure, 0, 100, bottom, top)
+    );
   }
 
   endShape();
 
-  // The selected year gently pulses. Other data points stay still.
+  // Points swell as the cursor approaches, like a magnifier.
+  // The selected year gently pulses.
   noStroke();
+
+  let nearest = null;
+  let nearestDist = Infinity;
+  let nearestX = 0;
+  let nearestY = 0;
 
   for (const row of observations) {
     const x = map(row.year, 2000, 2026, left, right);
     const y = map(row.pressure, 0, 100, bottom, top);
+    const d = dist(mx, my, x, y);
+    const near = constrain(1 - d / 70, 0, 1);
+
+    if (d < nearestDist) {
+      nearestDist = d;
+      nearest = row;
+      nearestX = x;
+      nearestY = y;
+    }
 
     if (row.year === selectedYear) {
       fill(45, 90, 100, 20);
-      circle(x, y, 24 + sin(frameCount * 0.06) * 3);
+      circle(x, y, 24 + sin(frameCount * 0.06) * 3 + near * 8);
 
       fill("#FFD166");
-      circle(x, y, 11 + sin(frameCount * 0.06) * 2);
+      circle(x, y, 11 + sin(frameCount * 0.06) * 2 + near * 7);
     } else {
-      fill("#87CEFA");
-      circle(x, y, 6);
+      fill(203, 46 - near * 36, 100);
+      circle(x, y, 6 + near * 9);
     }
+  }
+
+  // Tooltip for the closest point. Clicking it selects that year.
+  if (nearest && nearestDist < 26) {
+    wantHand = true;
+
+    fill(220, 60, 25, 92);
+    rect(nearestX, nearestY - 34, 96, 28, 8);
+
+    fill(0, 0, 100);
+    textAlign(CENTER, CENTER);
+    textSize(12);
+    text(nearest.year + " · " + nearest.pressure + "%", nearestX, nearestY - 34);
   }
 
   fill(0, 0, 75);
@@ -511,6 +892,14 @@ function drawOverfishingChart() {
     text(year, x, bottom + 22);
   }
 
+  // The big number pops whenever the selected year changes.
+  if (selectedYear !== lastYear) {
+    valuePop = 1;
+    lastYear = selectedYear;
+  }
+
+  valuePop *= 0.9;
+
   const selected = overfishingData.find(
     row => row.year === selectedYear
   );
@@ -520,11 +909,11 @@ function drawOverfishingChart() {
   if (selected && selected.pressure !== null) {
     const valuePulse = sin(frameCount * 0.05);
     noStroke();
-    fill(45, 90, 100, 12);
-    circle(0, valueY, 78 + valuePulse * 8);
+    fill(45, 90, 100, 12 + valuePop * 20);
+    circle(0, valueY, 78 + valuePulse * 8 + valuePop * 30);
 
     fill("#FFD166");
-    textSize(28 + valuePulse * 2);
+    textSize(28 + valuePulse * 2 + valuePop * 12);
     text(selected.pressure + "%", 0, valueY);
 
     fill(0, 0, 82);
@@ -550,6 +939,20 @@ function drawYearSlider() {
   const right = sliderWidth / 2;
   const knobX = map(selectedYear, 2000, 2026, left, right);
 
+  const mx = mouseX - width / 2;
+  const my = mouseY - height / 2;
+  const hovering = abs(my - sliderY) < 24 && mx >= left && mx <= right;
+
+  if (hovering || yearSliderDragging) {
+    wantHand = true;
+  }
+
+  yearKnob = lerp(
+    yearKnob,
+    yearSliderDragging ? 30 : hovering ? 25 : 20,
+    0.2
+  );
+
   fill(0, 0, 100);
   textSize(14);
   text("YEAR · " + selectedYear, 0, sliderY - 28);
@@ -560,8 +963,11 @@ function drawYearSlider() {
   fill(190, 70, 95);
   rect((left + knobX) / 2, sliderY, knobX - left, 6, 3);
 
+  fill(45, 90, 100, 18);
+  circle(knobX, sliderY, yearKnob + 14 + sin(frameCount * 0.08) * 3);
+
   fill("#FFD166");
-  circle(knobX, sliderY, 20);
+  circle(knobX, sliderY, yearKnob);
 
   fill(0, 0, 75);
   textSize(11);
@@ -639,6 +1045,10 @@ function keyPressed() {
     return;
   }
 
+  // Every space press sends one soft ripple and a couple of bubbles.
+  addRipple(0, 0, 220);
+  spawnBubbles(0, height / 2, 3, width * 0.3);
+
   if (scene === "title") {
     scene = "typing";
     return false;
@@ -649,6 +1059,8 @@ function keyPressed() {
     if (lettersShown < catchWord.length) {
       letterY[lettersShown] = 0;
       letterSpeed[lettersShown] = 0;
+      letterPop[lettersShown] = 1;
+      spawnBubbles((lettersShown - 2) * 50, catchLettersY(), 2, 15);
       lettersShown++;
     }
 
@@ -682,6 +1094,7 @@ function resetCatchRound() {
   lettersShown = 0;
   letterY = [];
   letterSpeed = [];
+  letterPop = [];
   lettersFalling = false;
   fishScale = 0;
   catchProgress = 0;
@@ -692,6 +1105,10 @@ function resetCatchRound() {
 }
 
 function mousePressed() {
+  // Every click makes a ripple and one or two bubbles.
+  addRipple(mouseX - width / 2, mouseY - height / 2, 90);
+  spawnBubbles(mouseX - width / 2, mouseY - height / 2, 2, 8);
+
   if (scene === "caught") {
     const mouseCanvasX = mouseX - width / 2;
     const mouseCanvasY = mouseY - height / 2;
@@ -724,6 +1141,22 @@ function mousePressed() {
     ) {
       yearSliderDragging = true;
       updateYearSlider();
+      return;
+    }
+
+    // Clicking a data point on the chart selects that year.
+    const { left, right, top, bottom } = chartBounds();
+
+    for (const row of overfishingData) {
+      if (row.pressure === null) continue;
+
+      const x = map(row.year, 2000, 2026, left, right);
+      const y = map(row.pressure, 0, 100, bottom, top);
+
+      if (dist(mouseCanvasX, mouseCanvasY, x, y) < 20) {
+        selectedYear = row.year;
+        break;
+      }
     }
 
     return;
@@ -734,6 +1167,10 @@ function mousePressed() {
   }
 
   caughtName = currentFish === 0 ? "Goldfish" : "Anglerfish";
+
+  // Splash when the fish is caught.
+  addRipple(0, 0, 260);
+  spawnBubbles(0, 0, 8, 60);
 
   userStartAudio();
   catchSound.play();
